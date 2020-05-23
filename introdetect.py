@@ -7,7 +7,7 @@ from datetime import datetime
 
 folder = r"P:/Serien/Alf/"#"D:/Temp/IntroDetect/"
 rough_dt = 0.7 #rough range of similar images between movies
-detailed_dt = 0.1 #for matching two movies in a second more detailed step
+detailed_dt = 0.01 #for matching two movies in a second more detailed step
 output_average = 3
 output_resolution = 1.0 / output_average #1sec of output resultion 
 dualRange = int(6.0 / rough_dt)*rough_dt #time in seconds that is *smaller* than the complete intro 
@@ -16,7 +16,7 @@ max_intro_endtime = 5*60
 devation_factor = 1.3 #which image deviation is allowed to be still within the intro
 max_intro_duration = 90 #not really relevant, should be (much) higher than the real duration
 infDeviation = 100000
- 
+speedupDeviationThreshold = 0 #  set to 0 to deactivate
 
 class Movie():
     
@@ -72,7 +72,7 @@ class CompareMovies():
         
         frame1 = m1.getFrame(t1)        
         
-        scale = 0.6
+        scale = 0.3
         width2 = int(frame1.shape[1] * scale)
         height2 = int(frame1.shape[0] * scale)
         dim = (width2, height2) 
@@ -103,6 +103,9 @@ class CompareMovies():
                     self.showFrames(m1,m2,time1, time2, time1+dualRange, time2+dualRange, dev, caption)
                     self.bestResult = (time1, time2, dev)
                     
+                if dev < speedupDeviationThreshold:
+                    return self.bestResult
+                    
         return self.bestResult
     
     
@@ -130,10 +133,11 @@ class CompareMovies():
                 dev = self.getDeviationMovie(m1, time1, m2, time2)
                 lst.append(dev)
                 
-                if dev > maxDev:
-                    maxDev = dev
+            meanDev = sum(lst) / len(lst)
+            if meanDev > maxDev:
+                maxDev = meanDev
                     
-            #print(t, dev, sum(lst) / len(lst), maxDevThreshold, maxDev)
+            #print(t, round(dev), round(meanDev), round(maxDevThreshold), round(maxDev) )
             #self.showFrames(m1,m2,time1, time2, None, None, dev, caption)                            
                  
             if sum(lst) / len(lst) > maxDevThreshold or time1 < 0 or time2 < 0:
@@ -144,7 +148,7 @@ class CompareMovies():
             
         
         if maxDevThreshold < infDeviation:            
-            print(sum(lst) / len(lst), " is not < ", maxDevThreshold)
+            print( meanDev, maxDev, " is not > ", maxDevThreshold)
             raise Exception("EXCEPTION: Nothing found in findIntroRange")
         return (None, None, maxDev)
     
@@ -162,7 +166,7 @@ class CompareMovies():
         (midTime1, midTime2, middev)   = self.findSameImage(movie1, movie2, roughTime1, roughTime2,      -rough_dt,      +rough_dt,     detailed_dt, dualRange, None, "Detailed")
         print("Detailed search", midTime1, midTime2, middev)
         
-        (endtime1, endtime2, maxdev)  = self.findIntroRange(movie1, movie2, midTime1, midTime2,   dualRange,  detailed_dt, infDeviation, "MaxDev")
+        (endtime1, endtime2, maxdev)  = self.findIntroRange(movie1, movie2, midTime1, midTime2,   dualRange,  output_resolution, infDeviation, "MaxDev")
         print("Get max deviation", endtime1, endtime2, maxdev)
         
         (endtime1, endtime2, enddev)  = self.findIntroRange(movie1, movie2, midTime1, midTime2,   max_intro_duration,  output_resolution, maxdev*devation_factor, "EndTime" )
@@ -208,11 +212,14 @@ class EdlFile():
 
 def run(folder):
     files = sorted(glob.glob(folder+"*.*"))
-    files = [x for x in files if x.endswith(".avi") or x.endswith(".mkv") or x.endswith(".mp4")]
+    files = [x for x in files if (x.endswith(".avi") or x.endswith(".mkv") or x.endswith(".mp4") ) and not "youtubeAudio" in x ] 
     files = files[1:]
     print(files)
     
     movies = CompareMovies()
+    
+    #movies.analyzeTwoFiles(Movie(r"P:\Serien\Alf\Alf_S03E06_17.01.15_12-00_rtlnitro_25_TVOON_DE.mpg.HQ.cut.avi"), Movie(r"P:\Serien\Alf\Alf_S03E07_17.01.15_12-25_rtlnitro_30_TVOON_DE.mpg.HQ.cut.avi"), None)
+    #return 
     
     edl = EdlFile()
     
